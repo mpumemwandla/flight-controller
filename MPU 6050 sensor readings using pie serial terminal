@@ -1,0 +1,61 @@
+import smbus
+import time
+import csv
+from datetime import datetime
+
+# MPU6050 I2C address and register map
+MPU6050_ADDR = 0x68
+PWR_MGMT_1 = 0x6B
+ACCEL_XOUT_H = 0x3B
+GYRO_XOUT_H = 0x43
+
+# Initialize I2C (bus 1 for Raspberry Pi)
+bus = smbus.SMBus(1)
+bus.write_byte_data(MPU6050_ADDR, PWR_MGMT_1, 0)  # Wake up sensor
+
+# Function to read 16-bit sensor values
+def read_raw_data(addr):
+    high = bus.read_byte_data(MPU6050_ADDR, addr)
+    low = bus.read_byte_data(MPU6050_ADDR, addr + 1)
+    value = (high << 8) | low
+    if value > 32768:
+        value -= 65536
+    return value
+
+# Create and open CSV file
+filename = "mpu_log.csv"
+with open(filename, mode='w', newline='') as file:
+    writer = csv.writer(file)
+    # Write header
+    writer.writerow(["Timestamp", "Accel_X (g)", "Accel_Y (g)", "Accel_Z (g)",
+                     "Gyro_X (°/s)", "Gyro_Y (°/s)", "Gyro_Z (°/s)"])
+
+    try:
+        while True:
+            # Read Accelerometer data
+            ax = read_raw_data(ACCEL_XOUT_H) / 16384.0
+            ay = read_raw_data(ACCEL_XOUT_H + 2) / 16384.0
+            az = read_raw_data(ACCEL_XOUT_H + 4) / 16384.0
+
+            # Read Gyroscope data
+            gx = read_raw_data(GYRO_XOUT_H) / 131.0
+            gy = read_raw_data(GYRO_XOUT_H + 2) / 131.0
+            gz = read_raw_data(GYRO_XOUT_H + 4) / 131.0
+
+            # Timestamp
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # Print to terminal
+            print(f"{timestamp}")
+            print(f"Accel (g) => X: {ax:.2f}, Y: {ay:.2f}, Z: {az:.2f}")
+            print(f"Gyro  (°/s)=> X: {gx:.2f}, Y: {gy:.2f}, Z: {gz:.2f}")
+            print("-" * 40)
+
+            # Write to CSV
+            writer.writerow([timestamp, ax, ay, az, gx, gy, gz])
+            file.flush()  # Ensure it writes to disk
+
+            time.sleep(0.5)
+
+    except KeyboardInterrupt:
+        print("\nLogging stopped by user.")
