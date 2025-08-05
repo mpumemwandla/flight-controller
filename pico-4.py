@@ -10,6 +10,7 @@ MAX_DUTY_US = 2000
 
 # === GLOBAL VECTOR ===
 vec = {"x": 0.0, "y": 0.0, "z": 0.0}
+prev_vec = {"x": 0.0, "y": 0.0, "z": 0.0}
 
 # === INIT MOTORS ===
 motors = []
@@ -26,21 +27,38 @@ def power_to_us(power):
     power = max(0.0, min(1.0, power))
     return MIN_DUTY_US + power * (MAX_DUTY_US - MIN_DUTY_US)
 
-def read_sensor():
-    # Hardcoded sensor readings for now
-    return {"x": 0.0, "y": 0.0, "z": 1.0} 
+def read_accelerometer():
+    # Dummy function mimicking accelerometer readings
+    return (0.0, 0.0, 1.0)  # ax, ay, az
+
+def read_gyroscope():
+    # Dummy function mimicking gyroscope readings
+    return (0.0, 0.0, 0.0)  # gx, gy, gz
 
 def set_motor_power(motor_index, power):
     us = power_to_us(power)
     motors[motor_index].duty_u16(us_to_duty(us, PWM_FREQ))
 
-def stabilize_drone():
-    global vec
-    sensor_data = read_sensor()
-    vec["x"] = sensor_data["x"]
-    vec["y"] = sensor_data["y"]
-    vec["z"] = sensor_data["z"]
-    update_motors(vec)
+def stabilize_drone(target_vec):
+    global vec, prev_vec
+    # Read sensor data
+    ax, ay, az = read_accelerometer()
+    gx, gy, gz = read_gyroscope()
+
+    # Update current vector using sensor data
+    vec["x"] = prev_vec["x"] + ax * 0.1  # Integrate acceleration
+    vec["y"] = prev_vec["y"] + ay * 0.1
+    vec["z"] = prev_vec["z"] + az * 0.1
+
+    # Compute motor speeds based on target vector and current vector
+    power_x = target_vec["x"] - vec["x"]
+    power_y = target_vec["y"] - vec["y"]
+    power_z = target_vec["z"] - vec["z"]
+
+    update_motors({"x": power_x, "y": power_y, "z": power_z})
+
+    # Store current vector for the next iteration
+    prev_vec = vec.copy()
 
 def update_motors(vec):
     x = vec["x"]
@@ -67,27 +85,25 @@ def update_motors(vec):
 
 def read_serial_input():
     # Simulating serial input as JSON string
-    input_command = '{"command": "takeoff"}'  # Hardcoded command for testing
+    input_command = '{"command": "move", "x": 0.1, "y": 0.0, "z": 0.5}'  # Example command
     return json.loads(input_command)
 
 def compute_motor_speeds(command):
-    # Hardcoded logic to compute motor speeds based on command
-    if command["command"] == "takeoff":
-        return [1.0, 1.0, 1.0, 1.0]  # Full throttle for takeoff
-    elif command["command"] == "land":
-        return [0.0, 0.0, 0.0, 0.0]  # Cut throttle for landing
-    else:
-        return [0.5, 0.5, 0.5, 0.5]  # Maintain hover
+    target_vec = {"x": 0.0, "y": 0.0, "z": 0.0}
+    if command["command"] == "move":
+        target_vec["x"] = command.get("x", 0.0)
+        target_vec["y"] = command.get("y", 0.0)
+        target_vec["z"] = command.get("z", 0.0)
+    return target_vec
 
 def main():
     print("Starting advanced movement simulation loop...")
+    target_vec = {"x": 0.0, "y": 0.0, "z": 0.0}
     while True:
         command = read_serial_input()
-        motor_speeds = compute_motor_speeds(command)
-        for i in range(4):
-            set_motor_power(i, motor_speeds[i])
+        target_vec = compute_motor_speeds(command)
         
-        stabilize_drone()
+        stabilize_drone(target_vec)
         time.sleep(0.1)
 
 # === RUN ===
