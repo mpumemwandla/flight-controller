@@ -59,9 +59,5 @@ while True:
     # Send to motors
     for p, m in zip(powers, motors):
         m.ChangeDutyCycle(power_to_us(p * 100.00))
-  ]
-
-  for p, m in zip(powers, motors):
-    m.ChangeDutyCycle(power_to_us(p * 100.00))
 
 GPIO.cleanup()
